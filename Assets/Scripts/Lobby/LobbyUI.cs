@@ -124,14 +124,11 @@ public class LobbyUI : MonoBehaviour
 
     private void RefreshPlayerList()
     {
-        // --- FIX CRÍTICO: Chequeo de nulidad ---
-        // Si el objeto container ya fue destruido, paramos inmediatamente.
         if (playerListContainer == null || this == null) return;
 
-        // Limpiar lista
-        foreach (Transform child in playerListContainer)
+        while (playerListContainer.childCount > 0)
         {
-            if (child != null) Destroy(child.gameObject);
+            DestroyImmediate(playerListContainer.GetChild(0).gameObject);
         }
 
         int index = 1;
@@ -140,7 +137,6 @@ public class LobbyUI : MonoBehaviour
 
         foreach (PlayerData player in AppManager.Instance.NetworkPlayers)
         {
-            // Seguridad al instanciar
             if (playerCardPrefab == null) continue;
 
             LobbyPlayerCard lobbyPlayerCard = Instantiate(playerCardPrefab, playerListContainer);
