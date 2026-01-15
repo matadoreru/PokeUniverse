@@ -1,0 +1,20 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!1045 &1
+EditorBuildSettings:
+  m_ObjectHideFlags: 0
+  serializedVersion: 2
+  m_Scenes:
+  - enabled: 1
+    path: Assets/Scenes/MainMenu.unity
+    guid: 64116f861eb578c49a7149f49c7bfb94
+  - enabled: 1
+    path: Assets/Scenes/Lobby.unity
+    guid: 1c7fbc98dd9ec9e4ca896af79dfbfd2f
+  - enabled: 1
+    path: Assets/Scenes/Game_Impostor.unity
+    guid: 2cda990e2423bbf4892e6590ba056729
+  - enabled: 1
+    path: Assets/Scenes/Game_SayOnePoke.unity
+    guid: e5ee18f0e2072ef46bf86fa1bbb63502
+  m_configObjects: {}
