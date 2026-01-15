@@ -25,9 +25,6 @@ Este proyecto sirve como demostración técnica de varias herramientas avanzadas
     * Cuenta de Steam (necesaria para la conexión P2P).
 
 2.  **Clonar el repositorio:**
-    ```bash
-    git clone [https://github.com/tu-usuario/poke-universe.git](https://github.com/tu-usuario/poke-universe.git)
-    ```
 
 3.  **Configuración:**
     * Abre el proyecto en Unity.
