@@ -14,13 +14,13 @@ public class SayOnePokeUI : MonoBehaviour
     [SerializeField] private GameObject gameOverPanel;
 
     [Header("Input Area")]
-    [SerializeField] private GameObject inputArea; // El panel inferior donde escribes
+    [SerializeField] private GameObject inputArea;
     [SerializeField] private TMP_InputField searchInput;
 
     [Header("Autocomplete Suggestions")]
-    [SerializeField] private Transform suggestionsContainer; // El Content del ScrollView o Panel vertical
-    [SerializeField] private GameObject suggestionPrefab; // Prefab con el script SuggestionButton
-    [SerializeField] private GameObject suggestionsPanelParent; // Para ocultar la lista si no escribes nada
+    [SerializeField] private Transform suggestionsContainer;
+    [SerializeField] private GameObject suggestionPrefab;
+    [SerializeField] private GameObject suggestionsPanelParent;
 
     [Header("Duel Info Visuals")]
     [SerializeField] private TextMeshProUGUI challengeText;
@@ -42,118 +42,137 @@ public class SayOnePokeUI : MonoBehaviour
         {
             SayOnePokeManager.Instance.player1Id.OnValueChanged += UpdateDuelists;
             SayOnePokeManager.Instance.player2Id.OnValueChanged += UpdateDuelists;
+            UpdateDuelists(0, 0); // Inicializar visuales
         }
 
-        // Listener para cada letra que escribas
         searchInput.onValueChanged.AddListener(OnSearchInputChanged);
 
         lobbyButton.onClick.AddListener(() => SayOnePokeManager.Instance.ReturnToLobby());
         replayButton.onClick.AddListener(() => SayOnePokeManager.Instance.ReplayGame());
 
-        // Estado inicial
         duelInfoPanel.SetActive(true);
         resultPanel.SetActive(false);
         gameOverPanel.SetActive(false);
-        inputArea.SetActive(false); // Se activa solo si es tu turno
-        suggestionsPanelParent.SetActive(false); // Oculto al inicio
+        inputArea.SetActive(false);
+        suggestionsPanelParent.SetActive(false);
     }
 
     private void Update()
     {
         if (SayOnePokeManager.Instance == null) return;
 
-        // Timer Visual
-        timerText.text = SayOnePokeManager.Instance.timer.Value.ToString("F1");
+        // Mostrar Timer con 1 decimal
+        float time = SayOnePokeManager.Instance.timer.Value;
+        timerText.text = time.ToString("F1");
 
-        // Controlar visibilidad del Input
+        // Si estamos en cuenta atrás (Timer < 3 pero Estado Countdown), pintar el timer de rojo
+        if (SayOnePokeManager.Instance.currentState.Value == SayOnePokeManager.DuelState.Countdown)
+            timerText.color = Color.red;
+        else
+            timerText.color = Color.white;
+
         CheckIfActivePlayer();
     }
 
-    // --- LÓGICA DE AUTOCOMPLETADO ---
-
     private void OnSearchInputChanged(string text)
     {
-        // 1. Limpiar sugerencias anteriores
+        // 1. Limpiar
         foreach (Transform child in suggestionsContainer) Destroy(child.gameObject);
 
-        // Si está vacío o es muy corto, ocultar lista
         if (string.IsNullOrEmpty(text))
         {
             suggestionsPanelParent.SetActive(false);
             return;
         }
 
-        suggestionsPanelParent.SetActive(true);
-
-        // 2. Buscar coincidencias
+        // 2. Buscar
         PokemonDatabase db = SayOnePokeManager.Instance.GetDatabase();
-        var allowedGens = SayOnePokeManager.Instance.config.allowedGens;
+        if (db == null) return;
 
         int matchesFound = 0;
         string searchLower = text.ToLower();
+
+        var allowedGensList = SayOnePokeManager.Instance.allowedGensNetList;
 
         for (int i = 0; i < db.allPokemon.Count; i++)
         {
             PokemonEntry poke = db.allPokemon[i];
 
-            // A) Filtro de Generación (Lobby)
-            if (!allowedGens.Contains(poke.generation)) continue;
+            // Filtro Generación: Si la lista tiene elementos, verificar. Si está vacía, permitir todo (seguridad).
+            if (allowedGensList != null && allowedGensList.Count > 0)
+            {
+                if (!allowedGensList.Contains(poke.generation)) continue;
+            }
 
-            // B) Filtro de Texto (Empieza por...)
+            // Filtro Texto (StartsWith = IntelliSense al inicio)
             if (poke.pokemonName.ToLower().StartsWith(searchLower))
             {
                 CreateSuggestion(poke, i);
                 matchesFound++;
             }
 
-            // C) Límite de 6 resultados
-            if (matchesFound >= 6) break;
+            if (matchesFound >= 5) break; // Máximo 5 sugerencias
         }
 
-        // Si no hay coincidencias, ocultar el panel para que no moleste
-        if (matchesFound == 0) suggestionsPanelParent.SetActive(false);
+        suggestionsPanelParent.SetActive(matchesFound > 0);
     }
 
     private void CreateSuggestion(PokemonEntry poke, int index)
     {
         GameObject btnObj = Instantiate(suggestionPrefab, suggestionsContainer);
         SuggestionButton script = btnObj.GetComponent<SuggestionButton>();
-        script.Setup(poke, index);
+        if (script != null) script.Setup(poke, index);
     }
 
-    // Llamado desde SuggestionButton
     public void SubmitAnswer(int index)
     {
         SayOnePokeManager.Instance.SubmitPokemonServerRpc(index);
-
-        // Limpiar UI tras enviar
         searchInput.text = "";
         suggestionsPanelParent.SetActive(false);
-        inputArea.SetActive(false); // Feedback visual inmediato de que ya enviaste
+        inputArea.SetActive(false);
     }
-
-    // --- VISUALIZACIÓN ---
 
     private void UpdateDuelists(ulong prev, ulong curr)
     {
+        if (SayOnePokeManager.Instance == null) return;
+
         ulong id1 = SayOnePokeManager.Instance.player1Id.Value;
         ulong id2 = SayOnePokeManager.Instance.player2Id.Value;
 
-        string n1 = "...", n2 = "...";
-        var d1 = AppManager.Instance.GetPlayerData(id1);
-        var d2 = AppManager.Instance.GetPlayerData(id2);
+        // Resetear visuales
+        p1Avatar.texture = null;
+        p1Avatar.color = Color.gray; // Gris si no hay imagen
+        p2Avatar.texture = null;
+        p2Avatar.color = Color.gray;
 
-        if (d1.HasValue)
+        string n1 = "Esperando...", n2 = "Esperando...";
+
+        if (id1 != ulong.MaxValue)
         {
-            n1 = d1.Value.PlayerName.ToString();
-            if (AppManager.Instance.steamAvatars.ContainsKey(d1.Value.SteamId))
-                p1Avatar.texture = AppManager.Instance.steamAvatars[d1.Value.SteamId];
+            var d1 = AppManager.Instance.GetPlayerData(id1);
+            if (d1.HasValue)
+            {
+                n1 = d1.Value.PlayerName.ToString();
+                if (AppManager.Instance.steamAvatars.ContainsKey(d1.Value.SteamId))
+                {
+                    p1Avatar.texture = AppManager.Instance.steamAvatars[d1.Value.SteamId];
+                    p1Avatar.color = Color.white;
+                }
+            }
         }
-        if (d2.HasValue)
+
+        if (id2 != ulong.MaxValue)
         {
-            n2 = d2.Value.PlayerName.ToString();
-            if (AppManager.Instance.steamAvatars.ContainsKey(d2.Value.SteamId))
-                p2Avatar.texture = AppManager.Instance.steamAvatars[d2.Value.SteamId];
+            var d2 = AppManager.Instance.GetPlayerData(id2);
+            if (d2.HasValue)
+            {
+                n2 = d2.Value.PlayerName.ToString();
+                if (AppManager.Instance.steamAvatars.ContainsKey(d2.Value.SteamId))
+                {
+                    p2Avatar.texture = AppManager.Instance.steamAvatars[d2.Value.SteamId];
+                    p2Avatar.color = Color.white;
+                }
+            }
         }
 
         vsText.text = $"{n1}  VS  {n2}";
@@ -161,15 +180,22 @@ public class SayOnePokeUI : MonoBehaviour
 
     private void CheckIfActivePlayer()
     {
+        if (Unity.Netcode.NetworkManager.Singleton == null) return;
+
         ulong myId = Unity.Netcode.NetworkManager.Singleton.LocalClientId;
         ulong p1 = SayOnePokeManager.Instance.player1Id.Value;
         ulong p2 = SayOnePokeManager.Instance.player2Id.Value;
 
         var state = SayOnePokeManager.Instance.currentState.Value;
+
+        // --- LÓGICA IMPORTANTE DEL BLOQUEO ---
+        // El input solo se activa si:
+        // 1. Soy uno de los jugadores (p1 o p2)
+        // 2. El estado es ACTIVE (ha pasado la cuenta atrás)
+        // 3. No estamos viendo la pantalla de resultados
         bool isDuelActive = (state == SayOnePokeManager.DuelState.Active);
         bool amIDueling = (myId == p1 || myId == p2);
 
-        // Mostrar Input Area SOLO si soy yo y es el momento activo
         bool showInput = amIDueling && isDuelActive && !resultPanel.activeSelf;
 
         if (showInput != inputArea.activeSelf)
@@ -177,8 +203,9 @@ public class SayOnePokeUI : MonoBehaviour
             inputArea.SetActive(showInput);
             if (showInput)
             {
-                searchInput.text = ""; // Resetear texto al aparecer
-                searchInput.Select();  // Auto-focus para escribir rápido
+                // Al activarse (justo al acabar la cuenta atrás), dar foco
+                searchInput.text = "";
+                searchInput.Select();
                 searchInput.ActivateInputField();
             }
         }
@@ -203,7 +230,13 @@ public class SayOnePokeUI : MonoBehaviour
     {
         gameOverPanel.SetActive(true);
         rankingText.text = rank;
-        lobbyButton.interactable = Unity.Netcode.NetworkManager.Singleton.IsServer;
-        replayButton.interactable = Unity.Netcode.NetworkManager.Singleton.IsServer;
+
+        bool isServer = Unity.Netcode.NetworkManager.Singleton.IsServer;
+        lobbyButton.interactable = isServer;
+        replayButton.interactable = isServer;
+
+        duelInfoPanel.SetActive(false);
+        resultPanel.SetActive(false);
+        inputArea.SetActive(false);
     }
 }

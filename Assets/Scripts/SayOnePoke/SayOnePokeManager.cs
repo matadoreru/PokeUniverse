@@ -18,43 +18,64 @@ public class SayOnePokeManager : NetworkBehaviour
     public NetworkVariable<ulong> player1Id = new NetworkVariable<ulong>(ulong.MaxValue);
     public NetworkVariable<ulong> player2Id = new NetworkVariable<ulong>(ulong.MaxValue);
 
-    public SayOnePokemonConfig config;
+    // --- NUEVO: Sincronización de Generaciones ---
+    public NetworkList<int> allowedGensNetList;
 
+    public SayOnePokemonConfig config; // Configuración local (solo útil en Host)
+
+    // Logica interna
     private List<ulong> bagOfPlayers = new List<ulong>();
     private int cyclesPlayed = 0;
-
     public Dictionary<ulong, int> scores = new Dictionary<ulong, int>();
 
+    // Reto actual
     private string targetType = "";
     private int targetGen = -1;
-    // Opcional: targetColor
 
     public enum DuelState { Waiting, Countdown, Active, RoundResult, GameOver }
 
-    private void Awake() { if (Instance == null) Instance = this; }
+    private void Awake()
+    {
+        if (Instance == null) Instance = this;
+        allowedGensNetList = new NetworkList<int>();
+    }
 
     public override void OnNetworkSpawn()
     {
         if (IsServer)
         {
             // Inicializar scores
-            foreach (var p in AppManager.Instance.NetworkPlayers) scores[p.ClientId] = 0;
+            foreach (var p in AppManager.Instance.NetworkPlayers)
+            {
+                if (!scores.ContainsKey(p.ClientId)) scores.Add(p.ClientId, 0);
+            }
 
-            LoadConfig();
+            LoadConfigAndSync(); // Cargar y sincronizar con clientes
             StartNewDuelLoop();
         }
     }
 
-    // Getter para la UI
     public PokemonDatabase GetDatabase() => pokemonDatabase;
 
-    private void LoadConfig()
+    private void LoadConfigAndSync()
     {
-        if (AppManager.Instance != null) config = AppManager.Instance.sayOnePokemonConfig;
-        else
+        if (AppManager.Instance != null)
         {
-            // Fallback para pruebas directas en editor
-            config = new SayOnePokemonConfig { answerTime = 10, totalCycles = 2, allowedGens = new List<int> { 1 } };
+            config = AppManager.Instance.sayOnePokemonConfig;
+        }
+
+        // Si la configuración está vacía (ej. prueba directa), poner defaults
+        if (config.allowedGens == null || config.allowedGens.Count == 0)
+        {
+            config.allowedGens = new List<int> { 1, 2, 3, 4, 5, 6, 7, 8, 9 };
+            config.answerTime = 15f;
+        }
+
+        // Sincronizar la lista de generaciones con la Red
+        allowedGensNetList.Clear();
+        foreach (int gen in config.allowedGens)
+        {
+            allowedGensNetList.Add(gen);
         }
     }
 
@@ -65,22 +86,29 @@ public class SayOnePokeManager : NetworkBehaviour
         if (currentState.Value == DuelState.Active || currentState.Value == DuelState.Countdown)
         {
             timer.Value -= Time.deltaTime;
+
             if (timer.Value <= 0)
             {
-                if (currentState.Value == DuelState.Countdown) BeginDuel();
-                else if (currentState.Value == DuelState.Active) EndDuelTimeout();
+                if (currentState.Value == DuelState.Countdown)
+                {
+                    BeginDuel();
+                }
+                else if (currentState.Value == DuelState.Active)
+                {
+                    EndDuelTimeout();
+                }
             }
         }
     }
 
-    // --- LÓGICA DE EMPAREJAMIENTO ---
+    // --- LÓGICA DE JUEGO ---
 
     private void StartNewDuelLoop()
     {
-        // Si no quedan suficientes jugadores en la bolsa, rellenar
         if (bagOfPlayers.Count < 2)
         {
-            if (bagOfPlayers.Count == 0 && cyclesPlayed >= config.totalCycles)
+            int maxCycles = (config.totalCycles > 0) ? config.totalCycles : 2;
+            if (bagOfPlayers.Count == 0 && cyclesPlayed >= maxCycles)
             {
                 EndGame();
                 return;
@@ -89,7 +117,6 @@ public class SayOnePokeManager : NetworkBehaviour
             cyclesPlayed++;
         }
 
-        // Sacar 2 jugadores
         ulong p1 = bagOfPlayers[0];
         ulong p2 = bagOfPlayers[1];
         bagOfPlayers.RemoveRange(0, 2);
@@ -99,8 +126,9 @@ public class SayOnePokeManager : NetworkBehaviour
 
         GenerateChallenge();
 
+        // Estado Countdown: Aquí el input estará bloqueado 3 segundos
         currentState.Value = DuelState.Countdown;
-        timer.Value = 3.0f; // 3 segs preparación
+        timer.Value = 3.0f;
     }
 
     private void RefillBag()
@@ -108,7 +136,6 @@ public class SayOnePokeManager : NetworkBehaviour
         List<ulong> allIds = new List<ulong>();
         foreach (var p in AppManager.Instance.NetworkPlayers) allIds.Add(p.ClientId);
 
-        // Shuffle
         var count = allIds.Count;
         var last = count - 1;
         for (var i = 0; i < last; ++i)
@@ -116,24 +143,23 @@ public class SayOnePokeManager : NetworkBehaviour
             var r = UnityEngine.Random.Range(i, count);
             var tmp = allIds[i]; allIds[i] = allIds[r]; allIds[r] = tmp;
         }
-
         bagOfPlayers.AddRange(allIds);
     }
 
     private void GenerateChallenge()
     {
-        int index;
-        // Obtenemos uno válido para asegurar que el reto es posible
-        PokemonEntry sample = pokemonDatabase.GetRandomPokemonFiltered(config.allowedGens, out index);
+        // Usar la lista de red para filtrar (así el Host usa lo mismo que los clientes verán)
+        List<int> validGens = new List<int>();
+        foreach (int g in allowedGensNetList) validGens.Add(g);
 
-        // Elegimos un criterio aleatorio: ¿Tipo? ¿Gen? ¿Ambos?
-        // Para simplificar V1: Tipo + Generación
+        int index;
+        PokemonEntry sample = pokemonDatabase.GetRandomPokemonFiltered(validGens, out index);
+
         targetType = sample.types[0];
         targetGen = sample.generation;
 
         SetChallengeClientRpc($"BUSCA: <color=yellow>{targetType}</color> de <color=orange>Gen {targetGen}</color>");
     }
-
 
     [ClientRpc]
     private void SetChallengeClientRpc(string text)
@@ -143,6 +169,7 @@ public class SayOnePokeManager : NetworkBehaviour
 
     private void BeginDuel()
     {
+        // Al pasar a Active, el input se desbloqueará en la UI
         currentState.Value = DuelState.Active;
         timer.Value = config.answerTime;
     }
@@ -161,10 +188,10 @@ public class SayOnePokeManager : NetworkBehaviour
 
         if (isCorrect)
         {
+            if (!scores.ContainsKey(senderId)) scores[senderId] = 0;
             scores[senderId] += 1;
             EndDuelRound(senderId, pokemonIndex, true);
         }
-        // Si falla, no hace nada (pierde tiempo)
     }
 
     private bool CheckAnswer(int index)
@@ -173,7 +200,9 @@ public class SayOnePokeManager : NetworkBehaviour
         var p = pokemonDatabase.allPokemon[index];
 
         bool typeMatch = false;
-        foreach (var t in p.types) if (t == targetType) typeMatch = true;
+        foreach (var t in p.types)
+            if (t.Trim().Equals(targetType.Trim(), System.StringComparison.OrdinalIgnoreCase))
+                typeMatch = true;
 
         bool genMatch = (p.generation == targetGen);
 
@@ -189,14 +218,15 @@ public class SayOnePokeManager : NetworkBehaviour
     {
         currentState.Value = DuelState.RoundResult;
 
-        string msg = "¡Tiempo! Empate.";
+        string msg = "¡Tiempo! Nadie acertó.";
         if (success)
         {
-            string pName = "Unknown";
+            string pName = "Jugador";
             var pData = AppManager.Instance.GetPlayerData(winnerId);
             if (pData.HasValue) pName = pData.Value.PlayerName.ToString();
 
-            msg = $"¡Punto para {pName}!";
+            string pokeName = pokemonDatabase.allPokemon[winningPokemonIndex].pokemonName;
+            msg = $"¡Punto para {pName}!\nUsó: {pokeName}";
         }
 
         ShowRoundResultClientRpc(msg);
@@ -209,8 +239,6 @@ public class SayOnePokeManager : NetworkBehaviour
         SayOnePokeUI.Instance.ShowRoundResult(msg);
     }
 
-    // --- GAME OVER ---
-
     private void EndGame()
     {
         currentState.Value = DuelState.GameOver;
@@ -220,7 +248,7 @@ public class SayOnePokeManager : NetworkBehaviour
         int pos = 1;
         foreach (var entry in ranking)
         {
-            string pName = "Unknown";
+            string pName = "Desconocido";
             var pData = AppManager.Instance.GetPlayerData(entry.Key);
             if (pData.HasValue) pName = pData.Value.PlayerName.ToString();
 
@@ -246,7 +274,8 @@ public class SayOnePokeManager : NetworkBehaviour
     public void ReplayGame()
     {
         if (!IsServer) return;
-        foreach (var key in scores.Keys.ToList()) scores[key] = 0;
+        var keys = new List<ulong>(scores.Keys);
+        foreach (var key in keys) scores[key] = 0;
         cyclesPlayed = 0;
         bagOfPlayers.Clear();
         StartNewDuelLoop();

@@ -371,6 +371,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 0de3ce6d956e59f49986b7bbcbad6dc0, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  iconImage: {fileID: 0}
+  iconImage: {fileID: 5918012848107967433}
   nameText: {fileID: 5679850838681481122}
   button: {fileID: 1319981930727498706}

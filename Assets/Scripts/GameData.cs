@@ -20,5 +20,5 @@ public enum GameType
 {
     Impostor,
     SayOnePokemon,
-    Quiz
+    Prox
 }

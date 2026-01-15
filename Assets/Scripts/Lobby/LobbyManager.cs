@@ -105,7 +105,7 @@ public class LobbyManager : NetworkBehaviour
         SayOnePokemonConfig config = new SayOnePokemonConfig
         {
             answerTime = sayOnePokeTurnDuration.Value, 
-            totalCycles = sayOnePokeTotalCycles.Value, // O lo que configures en la UI
+            totalCycles = sayOnePokeTotalCycles.Value, 
             filterByGen = sayOnePokeFilterByGen.Value,
             filterByType = sayOnePokeFilterByType.Value,
             allowedGens = new List<int>()

@@ -15,8 +15,14 @@ public class LobbyUI : MonoBehaviour
     [SerializeField] private Button startGameButton;
     [SerializeField] private Button leaveButton;
 
+    [Header("Tab Panels")]
+    [SerializeField] private List<Button> tabButtons;
+
+    [Header("Rules Panels")]
+    [SerializeField] private List<GameObject> rulePanels;
+
+
     [Header("Configuration Impostor UI")]
-    [SerializeField] private GameObject panelImpostor;
     [SerializeField] private TMP_InputField turnTimeInput;
     [SerializeField] private TMP_InputField impostorCountInput;
     [SerializeField] private Toggle hintGenToggle;
@@ -193,4 +199,36 @@ public class LobbyUI : MonoBehaviour
 
         isUpdatingVisuals = false;
     }
+
+    public void ChangeTabMenu(int tabShow) {
+        int index = 0;
+        foreach (GameObject rulePanel in rulePanels) {
+            if (index == tabShow)
+            {
+                rulePanel.SetActive(true);
+            }
+            else {
+                rulePanel.SetActive(false);
+            }
+            index++;
+        }
+
+        index = 0;
+
+        foreach (Button tabButton in tabButtons) {
+            if (index == tabShow)
+            {
+                tabButton.interactable = false;
+            }
+            else
+            {
+                tabButton.interactable = true;
+            }
+            index++;
+        }
+
+        LobbyManager.Instance.selectedGame.Value = (GameType)tabShow;
+    }
+
+
 }
