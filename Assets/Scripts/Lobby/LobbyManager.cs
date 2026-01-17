@@ -17,31 +17,44 @@ public class LobbyManager : NetworkBehaviour
     [SerializeField] public NetworkVariable<bool> impostorHintColor = new NetworkVariable<bool>(true);
     [SerializeField] public NetworkList<bool> impostorGenerationStates;
 
-    [Header("Say One Pokemon Settings")]
-    [SerializeField] public NetworkVariable<float> sayOnePokeTurnDuration = new NetworkVariable<float>(30f);
-    [SerializeField] public NetworkVariable<int> sayOnePokeTotalCycles = new NetworkVariable<int>(1);
-    [SerializeField] public NetworkVariable<bool> sayOnePokeFilterByGen = new NetworkVariable<bool>(true);
-    [SerializeField] public NetworkVariable<bool> sayOnePokeFilterByType = new NetworkVariable<bool>(true);
-    [SerializeField] public NetworkList<bool> sayOnePokeGenerationStates;
+    [Header("Higher Or Lower Settings")]
+    [SerializeField] public NetworkVariable<float> hlAnswerTime = new NetworkVariable<float>(30f);
+    [SerializeField] public NetworkVariable<Difficulty> hlDifficulty = new NetworkVariable<Difficulty>(Difficulty.MediumHard);
+
+    // Stats Toggles
+    [SerializeField] public NetworkVariable<bool> hlGuessHP = new NetworkVariable<bool>(true);
+    [SerializeField] public NetworkVariable<bool> hlGuessAT = new NetworkVariable<bool>(true);
+    [SerializeField] public NetworkVariable<bool> hlGuessDF = new NetworkVariable<bool>(true);
+    [SerializeField] public NetworkVariable<bool> hlGuessSP_AT = new NetworkVariable<bool>(true);
+    [SerializeField] public NetworkVariable<bool> hlGuessSP_DF = new NetworkVariable<bool>(true);
+    [SerializeField] public NetworkVariable<bool> hlGuessSPD = new NetworkVariable<bool>(true);
+    [SerializeField] public NetworkVariable<bool> hlGuessHEI = new NetworkVariable<bool>(true);
+    [SerializeField] public NetworkVariable<bool> hlGuessWEI = new NetworkVariable<bool>(true);
+
+    [SerializeField] public NetworkList<bool> hlGenerationStates;
 
     private void Awake()
     {
         if (Instance == null) Instance = this;
         impostorGenerationStates = new NetworkList<bool>();
-        sayOnePokeGenerationStates = new NetworkList<bool>();
+        hlGenerationStates = new NetworkList<bool>();
     }
 
     public override void OnNetworkSpawn()
     {
         if (IsServer)
         {
+            // Initialize Impostor Gens
             if (impostorGenerationStates.Count == 0)
-            {
                 for (int i = 0; i < 9; i++) impostorGenerationStates.Add(true);
-            }
+
+            // Initialize HigherLower Gens
+            if (hlGenerationStates.Count == 0)
+                for (int i = 0; i < 9; i++) hlGenerationStates.Add(true);
         }
     }
 
+    // --- IMPOSTOR RPCS ---
 
     [ServerRpc(RequireOwnership = false)]
     public void UpdateSettingsImpostorServerRpc(float time, int impostors, bool hGen, bool hType, bool hColor)
@@ -57,28 +70,51 @@ public class LobbyManager : NetworkBehaviour
     public void SetGenerationStateServerRpc(int index, bool state)
     {
         if (index >= 0 && index < impostorGenerationStates.Count)
-        {
             impostorGenerationStates[index] = state;
-        }
     }
+
+
+    [ServerRpc(RequireOwnership = false)]
+    public void UpdateSettingsHigherOrLowerServerRpc(float time, Difficulty diff, bool hp, bool at, bool df, bool spa, bool spd, bool vel, bool wei, bool hei)
+    {
+        hlAnswerTime.Value = time;
+        hlDifficulty.Value = diff;
+        hlGuessHP.Value = hp;
+        hlGuessAT.Value = at;
+        hlGuessDF.Value = df;
+        hlGuessSP_AT.Value = spa;
+        hlGuessSP_DF.Value = spd;
+        hlGuessSPD.Value = vel;
+        hlGuessWEI.Value = wei;
+        hlGuessHEI.Value = hei;
+    }
+
+    [ServerRpc(RequireOwnership = false)]
+    public void SetGenerationStateHLServerRpc(int index, bool state)
+    {
+        if (index >= 0 && index < hlGenerationStates.Count)
+            hlGenerationStates[index] = state;
+    }
+
+    // --- START GAME LOGIC ---
 
     public void StartGame()
     {
         if (!IsServer) return;
 
-        switch (selectedGame.Value) {
+        switch (selectedGame.Value)
+        {
             case GameType.Impostor:
                 StartGameImpostor();
                 break;
-            case GameType.SayOnePokemon:
-                StartGameSayOnePokemon();
+            case GameType.HigherOrLower: 
+                StartGameHigherOrLower();
                 break;
         }
     }
 
     private void StartGameImpostor()
     {
-        // TODO HARDCODED NUM OF ROUNDS CHANGE IT
         ImpostorPokeConfig config = new ImpostorPokeConfig
         {
             roundsToVote = 2,
@@ -100,26 +136,33 @@ public class LobbyManager : NetworkBehaviour
         AppManager.Instance.LoadScene("Game_Impostor");
     }
 
-    private void StartGameSayOnePokemon()
+    private void StartGameHigherOrLower()
     {
-        SayOnePokemonConfig config = new SayOnePokemonConfig
+        HigherOrLowerConfig config = new HigherOrLowerConfig
         {
-            answerTime = sayOnePokeTurnDuration.Value, 
-            totalCycles = sayOnePokeTotalCycles.Value, 
-            filterByGen = sayOnePokeFilterByGen.Value,
-            filterByType = sayOnePokeFilterByType.Value,
+            answerTime = hlAnswerTime.Value,
+            difficulty = hlDifficulty.Value,
+            guessHP = hlGuessHP.Value,
+            guessAT = hlGuessAT.Value,
+            guessDF = hlGuessDF.Value,
+            guessATESP = hlGuessSP_AT.Value,
+            guessDFESP = hlGuessSP_DF.Value,
+            guessVEL = hlGuessSPD.Value,
+            guessHEI = hlGuessHEI.Value,
+            guessWEI = hlGuessWEI.Value,
             allowedGens = new List<int>()
         };
 
-        for (int i = 0; i < sayOnePokeGenerationStates.Count; i++)
+        for (int i = 0; i < hlGenerationStates.Count; i++)
         {
-            if (sayOnePokeGenerationStates[i]) config.allowedGens.Add(i + 1);
+            if (hlGenerationStates[i]) config.allowedGens.Add(i + 1);
         }
         if (config.allowedGens.Count == 0) config.allowedGens.Add(1);
 
-        AppManager.Instance.sayOnePokemonConfig = config;
-        AppManager.Instance.LoadScene("Game_SayOnePoke");
+        AppManager.Instance.higherOrLowerConfig = config;
+        AppManager.Instance.LoadScene("Game_HigherOrLower");
     }
+
     public void LeaveLobby()
     {
         NetworkManager.Singleton.Shutdown();

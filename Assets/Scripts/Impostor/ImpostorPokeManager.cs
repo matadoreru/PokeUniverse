@@ -12,7 +12,7 @@ public class ImpostorPokeManager : NetworkBehaviour
     [SerializeField] private PokemonDatabase pokemonDatabase;
 
     [Header("Runtime State")]
-    public NetworkVariable<GameState> currentState = new NetworkVariable<GameState>(GameState.Playing);
+    public NetworkVariable<GameStateImpostor> currentState = new NetworkVariable<GameStateImpostor>(GameStateImpostor.Playing);
     public NetworkVariable<ulong> activePlayerId = new NetworkVariable<ulong>(ulong.MaxValue);
     public NetworkVariable<int> currentRound = new NetworkVariable<int>(1);
     public NetworkVariable<float> turnTimer = new NetworkVariable<float>(0f);
@@ -36,8 +36,7 @@ public class ImpostorPokeManager : NetworkBehaviour
     // Events
     public System.Action<string> OnWordSubmitted;
     public System.Action OnTurnChanged;
-    public System.Action<GameState> OnStateChanged;
-    // Modificado para pasar datos del Pokémon al UI de GameOver
+    public System.Action<GameStateImpostor> OnStateChanged;
     public System.Action<string, PokemonEntry, bool> OnGameEnded;
     public System.Action<ulong, ulong> OnVoteCast;
 
@@ -74,7 +73,7 @@ public class ImpostorPokeManager : NetworkBehaviour
 
     private void StartMatch(List<int> activeGens)
     {
-        currentState.Value = GameState.Playing;
+        currentState.Value = GameStateImpostor.Playing;
         playerVotes.Clear();
         SetupTurnOrder();
         ShowTurnOrderToPlayersClientRpc(turnOrder.ToArray());
@@ -130,7 +129,7 @@ public class ImpostorPokeManager : NetworkBehaviour
 
     private void Update()
     {
-        if (IsHost && currentState.Value == GameState.Playing && activePlayerId.Value != ulong.MaxValue)
+        if (IsHost && currentState.Value == GameStateImpostor.Playing && activePlayerId.Value != ulong.MaxValue)
         {
             turnTimer.Value -= Time.deltaTime;
             if (turnTimer.Value <= 0) ForceSkipTurn();
@@ -238,7 +237,7 @@ public class ImpostorPokeManager : NetworkBehaviour
     private void StartVotingPhase()
     {
         activePlayerId.Value = ulong.MaxValue;
-        currentState.Value = GameState.Voting;
+        currentState.Value = GameStateImpostor.Voting;
     }
 
     [ServerRpc(RequireOwnership = false)]
@@ -247,7 +246,7 @@ public class ImpostorPokeManager : NetworkBehaviour
         ulong voterId = rpcParams.Receive.SenderClientId;
         ShowVoteClientRpc(voterId, suspectId);
 
-        if (currentState.Value != GameState.Voting) return;
+        if (currentState.Value != GameStateImpostor.Voting) return;
         if (playerVotes.ContainsKey(voterId)) return;
 
         playerVotes[voterId] = suspectId;
@@ -272,7 +271,7 @@ public class ImpostorPokeManager : NetworkBehaviour
 
     private void CalculateResults()
     {
-        currentState.Value = GameState.GameOver;
+        currentState.Value = GameStateImpostor.GameOver;
         var voteCounts = playerVotes.GroupBy(v => v.Value).OrderByDescending(g => g.Count()).ToList();
 
         ulong mostVotedId = (voteCounts.Count > 0) ? voteCounts[0].Key : ulong.MaxValue;

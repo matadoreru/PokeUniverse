@@ -15,6 +15,6 @@ EditorBuildSettings:
     path: Assets/Scenes/Game_Impostor.unity
     guid: 2cda990e2423bbf4892e6590ba056729
   - enabled: 1
-    path: Assets/Scenes/Game_SayOnePoke.unity
-    guid: e5ee18f0e2072ef46bf86fa1bbb63502
+    path: Assets/Scenes/Game_HigherOrLower.unity
+    guid: cc6fa5e04d6cbf648867efd62333957a
   m_configObjects: {}

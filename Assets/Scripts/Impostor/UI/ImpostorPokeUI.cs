@@ -48,7 +48,7 @@ public class ImpostorPokeUI : MonoBehaviour
         RefreshPlayerList();
 
         // Si entramos tarde y el juego ya empezó (Late Join)
-        if (ImpostorPokeManager.Instance.currentState.Value == GameState.Playing)
+        if (ImpostorPokeManager.Instance.currentState.Value == GameStateImpostor.Playing)
         {
             ImpostorPokeManager.Instance.ClientRefreshSecretUI();
             RefreshTurnUI();
@@ -66,7 +66,7 @@ public class ImpostorPokeUI : MonoBehaviour
     private void Update()
     {
         // Actualización del Timer vía Update (más fluido que NetworkVariable events)
-        if (ImpostorPokeManager.Instance.currentState.Value == GameState.Playing)
+        if (ImpostorPokeManager.Instance.currentState.Value == GameStateImpostor.Playing)
         {
             float maxTime = ImpostorPokeManager.Instance.turnDurationNetVar.Value;
             float currentTime = ImpostorPokeManager.Instance.turnTimer.Value;
@@ -76,9 +76,9 @@ public class ImpostorPokeUI : MonoBehaviour
 
     // --- State Handlers ---
 
-    private void HandleStateChanged(GameState newState)
+    private void HandleStateChanged(GameStateImpostor newState)
     {
-        if (newState == GameState.Playing)
+        if (newState == GameStateImpostor.Playing)
         {
             voteTabButton.interactable = false;
             logTabButton.interactable = false;
@@ -87,7 +87,7 @@ public class ImpostorPokeUI : MonoBehaviour
             hudUI.Show();
             RefreshTurnUI();
         }
-        else if (newState == GameState.Voting)
+        else if (newState == GameStateImpostor.Voting)
         {
             hudUI.Hide(); 
             secretUI.Show();
@@ -120,7 +120,7 @@ public class ImpostorPokeUI : MonoBehaviour
 
     private void RefreshTurnUI()
     {
-        if (ImpostorPokeManager.Instance.currentState.Value != GameState.Playing) return;
+        if (ImpostorPokeManager.Instance.currentState.Value != GameStateImpostor.Playing) return;
 
         ulong activeId = ImpostorPokeManager.Instance.activePlayerId.Value;
         bool isMyTurn = ImpostorPokeManager.Instance.IsMyTurn();

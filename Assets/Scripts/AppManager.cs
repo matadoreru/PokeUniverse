@@ -15,7 +15,7 @@ public class AppManager : NetworkBehaviour
 
     [Header("Minigames Config")]
     public ImpostorPokeConfig impostorPokeConfig;
-    public SayOnePokemonConfig sayOnePokemonConfig;
+    public HigherOrLowerConfig higherOrLowerConfig;
     private void Awake()
     {
         if (Instance == null)
@@ -100,12 +100,39 @@ public struct ImpostorPokeConfig
 }
 
 [System.Serializable]
-public struct SayOnePokemonConfig
+public struct HigherOrLowerConfig
 {
-    public float answerTime;      
-    public int totalCycles;       
-    public List<int> allowedGens; 
-    // Filters
-    public bool filterByGen;
-    public bool filterByType;
+    public float answerTime;
+    public List<int> allowedGens;
+    public Difficulty difficulty;
+    public bool guessHP;
+    public bool guessAT;
+    public bool guessDF;
+    public bool guessATESP;
+    public bool guessDFESP;
+    public bool guessVEL;
+    public bool guessHEI; 
+    public bool guessWEI;
+}
+
+public enum Difficulty
+{
+    VeryEasy = 50,
+    Easy = 40,
+    MediumEasy = 35,
+    Medium = 25,
+    MediumHard = 15,
+    Hard = 10
+}
+
+public enum StatType
+{
+    HP, AT, DF, SP_AT, SP_DF, SPD, HEIGHT, WEIGHT
+}
+
+public enum ComparisonOperator
+{
+    Higher,
+    Lower,
+    Equal // (Equal is tough with precise stats, maybe keep it simple with Higher/Lower first)
 }

@@ -2,11 +2,17 @@ using Unity.Netcode;
 using Unity.Collections;
 using System;
 
-public enum GameState
+public enum GameStateImpostor
 {
     Playing,
     Voting,
     GameOver
+}
+
+public enum GameStateHigherOrLower
+{
+    Voting,
+    Result,
 }
 
 public enum GameRole
@@ -19,6 +25,6 @@ public enum GameRole
 public enum GameType
 {
     Impostor,
-    SayOnePokemon,
+    HigherOrLower,
     Prox
 }

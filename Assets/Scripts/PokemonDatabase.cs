@@ -10,15 +10,20 @@ public class PokemonDatabase : ScriptableObject
         public int id;
         public string pokemonName;
         public Sprite pokemonSprite;
-        public Sprite shinySprite; 
+        public Sprite shinySprite;
 
         [Tooltip("Primary and Secondary types")]
         public string[] types;
 
-        public string mainColor; 
+        public string mainColor;
         public int generation;
+
+        // New Stats for Higher/Lower Game
         public float heightMeters;
         public float weightKg;
+
+        [Tooltip("Order: HP, Attack, Defense, Sp. Atk, Sp. Def, Speed")]
+        public int[] stats;
     }
 
     public List<PokemonEntry> allPokemon;

@@ -5,6 +5,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Threading.Tasks;
 
+#if UNITY_EDITOR
 [CustomEditor(typeof(PokemonDatabase))]
 public class PokemonImporter : Editor
 {
@@ -14,25 +15,29 @@ public class PokemonImporter : Editor
     {
         public string name;
         public int id;
-        public int height;
-        public int weight;
+        public int height; // Decimetres
+        public int weight; // Hectograms
         public SpriteList sprites;
         public TypeEntry[] types;
-        public SpeciesRef species; // Reference to get color
+        public StatEntry[] stats; // NEW
+        public SpeciesRef species;
     }
 
     [System.Serializable]
     private class SpriteList
     {
         public string front_default;
-        public string front_shiny; // NEW
+        public string front_shiny;
     }
 
     [System.Serializable] private class TypeEntry { public TypeInfo type; }
     [System.Serializable] private class TypeInfo { public string name; }
-    [System.Serializable] private class SpeciesRef { public string url; }
 
-    // New JSON for Species Color
+    // Stats JSON structure
+    [System.Serializable] private class StatEntry { public int base_stat; public StatInfo stat; }
+    [System.Serializable] private class StatInfo { public string name; }
+
+    [System.Serializable] private class SpeciesRef { public string url; }
     [System.Serializable] private class SpeciesJson { public ColorInfo color; }
     [System.Serializable] private class ColorInfo { public string name; }
 
@@ -44,7 +49,7 @@ public class PokemonImporter : Editor
         DrawDefaultInspector();
         PokemonDatabase db = (PokemonDatabase)target;
         GUILayout.Space(20);
-        GUILayout.Label("?? Importador Pro (Shiny + Color)", EditorStyles.boldLabel);
+        GUILayout.Label("?? Importador Pro (Stats + Shiny + Color)", EditorStyles.boldLabel);
 
         startId = EditorGUILayout.IntField("Start ID", startId);
         endId = EditorGUILayout.IntField("End ID", endId);
@@ -57,7 +62,11 @@ public class PokemonImporter : Editor
     {
         string folderPath = "Assets/Resources/PokemonIcons";
         if (!Directory.Exists(folderPath)) Directory.CreateDirectory(folderPath);
+
         if (db.allPokemon == null) db.allPokemon = new List<PokemonDatabase.PokemonEntry>();
+
+        // Avoid duplicates if appending
+        // db.allPokemon.Clear(); 
 
         for (int i = startId; i <= endId; i++)
         {
@@ -69,7 +78,7 @@ public class PokemonImporter : Editor
             var data = await FetchJson<PokemonJson>(url);
             if (data == null) continue;
 
-            // 2. Get Color Data (Extra Call)
+            // 2. Get Color Data
             string colorName = "Unknown";
             if (!string.IsNullOrEmpty(data.species.url))
             {
@@ -81,10 +90,23 @@ public class PokemonImporter : Editor
             Sprite normalSprite = await GetSpriteTexture(data.sprites.front_default, $"{data.name}", folderPath);
             Sprite shinySprite = await GetSpriteTexture(data.sprites.front_shiny, $"{data.name}_shiny", folderPath);
 
-            // 4. Build Entry
+            // 4. Process Types
             List<string> typeList = new List<string>();
             foreach (var t in data.types) typeList.Add(Capitalize(t.type.name));
 
+            // 5. Process Stats (Order: HP, ATK, DEF, SP_ATK, SP_DEF, SPD)
+            // API order matches usually, but safer to check names if robust. 
+            // For simplicity, API order is consistently: hp, attack, defense, special-attack, special-defense, speed.
+            int[] baseStats = new int[6];
+            if (data.stats != null)
+            {
+                for (int s = 0; s < data.stats.Length && s < 6; s++)
+                {
+                    baseStats[s] = data.stats[s].base_stat;
+                }
+            }
+
+            // 6. Build Entry
             PokemonDatabase.PokemonEntry entry = new PokemonDatabase.PokemonEntry
             {
                 id = data.id,
@@ -93,18 +115,21 @@ public class PokemonImporter : Editor
                 shinySprite = shinySprite,
                 types = typeList.ToArray(),
                 mainColor = colorName,
-                heightMeters = data.height / 10f,
-                weightKg = data.weight / 10f,
-                generation = CalculateGeneration(data.id)
+                heightMeters = data.height / 10f, // API uses decimetres
+                weightKg = data.weight / 10f,     // API uses hectograms
+                generation = CalculateGeneration(data.id),
+                stats = baseStats
             };
 
+            // Remove existing if updating
+            db.allPokemon.RemoveAll(x => x.id == entry.id);
             db.allPokemon.Add(entry);
         }
 
         EditorUtility.ClearProgressBar();
         EditorUtility.SetDirty(db);
         AssetDatabase.SaveAssets();
-        Debug.Log("? Database Updated!");
+        Debug.Log("? Database Updated Successfully!");
     }
 
     private async Task<T> FetchJson<T>(string url)
@@ -121,6 +146,14 @@ public class PokemonImporter : Editor
     private async Task<Sprite> GetSpriteTexture(string url, string name, string folderPath)
     {
         if (string.IsNullOrEmpty(url)) return null;
+
+        // Check if file exists to skip download (Caching)
+        string fullPath = $"{folderPath}/{name}.png";
+        if (File.Exists(fullPath))
+        {
+            return AssetDatabase.LoadAssetAtPath<Sprite>(fullPath);
+        }
+
         using (UnityWebRequest imgRequest = UnityWebRequestTexture.GetTexture(url))
         {
             var op = imgRequest.SendWebRequest();
@@ -129,15 +162,16 @@ public class PokemonImporter : Editor
             {
                 Texture2D texture = DownloadHandlerTexture.GetContent(imgRequest);
                 byte[] bytes = texture.EncodeToPNG();
-                string fullPath = $"{folderPath}/{name}.png";
                 File.WriteAllBytes(fullPath, bytes);
-                AssetDatabase.Refresh();
 
+                // Import settings
+                AssetDatabase.ImportAsset(fullPath); // Force import first
                 TextureImporter importer = (TextureImporter)AssetImporter.GetAtPath(fullPath);
                 if (importer != null)
                 {
                     importer.textureType = TextureImporterType.Sprite;
-                    importer.filterMode = FilterMode.Point;
+                    importer.filterMode = FilterMode.Point; // Pixel art style
+                    importer.spritePixelsPerUnit = 32; // Adjust if sprites look too small/big
                     importer.SaveAndReimport();
                 }
                 return AssetDatabase.LoadAssetAtPath<Sprite>(fullPath);
@@ -155,3 +189,4 @@ public class PokemonImporter : Editor
         if (id <= 809) return 7; if (id <= 905) return 8; return 9;
     }
 }
+#endif
