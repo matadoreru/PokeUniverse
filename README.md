@@ -7,7 +7,7 @@
 
 **Poké Universe** es un proyecto *fan-made* multijugador desarrollado en Unity. El objetivo es crear una colección de minijuegos sociales ambientados en el universo Pokémon para jugar con amigos a través de Steam.
 
-> 🚧 **Estado Actual:** El proyecto se encuentra en fase de desarrollo (Alpha). Actualmente cuenta con un modo de juego jugable: **"Impostor"**.
+> 🚧 **Estado Actual:** El proyecto se encuentra en fase de desarrollo (Alpha). Actualmente cuenta con un modo de juego jugable: **"Impostor"** y HigherOrLower que se esta mejorando.
 
 ## 🛠️ Tecnologías Utilizadas
 
